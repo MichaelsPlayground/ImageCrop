@@ -40,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
     ActivityResultLauncher<Intent> cameraActivityResultLauncher;
     ActivityResultLauncher<Intent> galleryActivityResultLauncher;
     ActivityResultLauncher<Intent> cropActivityResultLauncher;
+    ActivityResultLauncher<Intent> saveCroppedPhotoActivityResultLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,6 +60,16 @@ public class MainActivity extends AppCompatActivity {
                 onPickPhoto();
             }
         });
+
+        Button saveCroppedImage = findViewById(R.id.buttonSaveCrop);
+        saveCroppedImage.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                onSaveCroppedPhoto();
+            }
+        });
+
+
 
         cameraActivityResultLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -90,6 +101,22 @@ public class MainActivity extends AppCompatActivity {
                         Bitmap cropImage = loadFromUri(resultProvider);
                         ImageView ivPreview = findViewById(R.id.resultView);
                         ivPreview.setImageBitmap(getResizedBitmap(cropImage, 400));
+                    }
+                });
+
+        saveCroppedPhotoActivityResultLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK) {
+                        Log.d(APP_TAG, "saveCroppedPhotoActivityResultLauncher");
+
+                        Uri uriDestination = result.getData().getData();
+                        saveBitmapFileToExternal(resultProvider, uriDestination);
+                        /*
+                        Bitmap cropImage = loadFromUri(resultProvider);
+                        ImageView ivPreview = findViewById(R.id.resultView);
+                        ivPreview.setImageBitmap(getResizedBitmap(cropImage, 400));
+                        */
                     }
                 });
 
@@ -177,6 +204,17 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public void onSaveCroppedPhoto() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("image/*");
+            //intent.putExtra(android.content.Intent.EXTRA_STREAM, resultProvider);
+            intent.putExtra(Intent.EXTRA_TITLE, "crop.jpg");
+            saveCroppedPhotoActivityResultLauncher.launch(intent);
+        }
+    }
+
     // Returns the File for a photo stored on disk given the fileName
     public File getPhotoFileUri(String fileName) {
         File mediaStorageDir = new File(getExternalFilesDir(""), APP_TAG);
@@ -237,4 +275,21 @@ public class MainActivity extends AppCompatActivity {
         return Bitmap.createScaledBitmap(image, width, height, true);
     }
 
+    private void saveBitmapFileToExternal(Uri sourceUri, Uri destinationUri) {
+        try {
+            Bitmap bitmap =  loadFromUri(sourceUri);
+
+            File imageFile = getPhotoFileUri(destinationUri.toString());
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                intermediateProvider = FileProvider.getUriForFile(MainActivity.this, "com.photostream.crop.fileprovider", imageFile);
+            else
+                intermediateProvider = Uri.fromFile(imageFile);
+
+            OutputStream out = new FileOutputStream(imageFile);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            out.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }
